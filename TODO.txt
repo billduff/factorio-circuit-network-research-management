@@ -1,0 +1,5 @@
+- Add outputs for pre-reqs and successor technologies of a tech.
+- Output recipes (or maybe just items and fluids?) a given research unlocks.
+- Make the time-cost of research available on the circuit network.
+- Output the triggers of trigger-based research available on the circuit network.
+- Make the "given tech" for the various output queries settable by the network.

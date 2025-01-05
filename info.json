@@ -1,0 +1,9 @@
+{
+  "name": "circuit-network-research-management",
+  "version": "0.0.2",
+  "title": "Circuit Network Research Management",
+  "author": "wduff",
+  "factorio_version": "2.0",
+  "dependencies": ["base >= 2.0"],
+  "description": "Adds a 'Research administration' building that can be sent circuit network signals to control the research queue."
+}
