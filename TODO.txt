@@ -1,5 +1,26 @@
-- Add outputs for pre-reqs and successor technologies of a tech.
-- Output recipes (or maybe just items and fluids?) a given research unlocks.
-- Make the time-cost of research available on the circuit network.
-- Output the triggers of trigger-based research available on the circuit network.
-- Make the "given tech" for the various output queries settable by the network.
+Bugfixes:
+- Don't update the queue if it's already correct (updating it causes some UI flickering).
+- Clean up player state when a player is removed from the game.
+- Preserve state when the building is copy-pasted.
+- Related to the above, support the UI on ghosts.
+
+Features:
+- Allow "output cost" (and other outputs features we add) to get the tech to provide info about from
+  the network, instead of requiring it to be set manually by the player.
+- Output a pulse signal when a research finishes.
+- Allow specifying the level of an infinite research?
+- Make the refresh rate configurable.
+- Refresh on some events, such as research finished.
+- Output previous research
+
+Support more outputs about a given research:
+- time cost
+- current level
+- max level?
+- pre-req and successor tech
+- recipes unlocked (or maybe just items and fluids those recipes produce, since there aren't recipe
+  signals in the base game)
+- split up num units required and cost per unit (instead of the multiple of those we do now)
+- triggers for trigger-based research, which don't have a unit cost
+- whether the research is not available/available/in progress/complete
+- amount of progress made (we do this now, but only for the current research)

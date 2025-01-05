@@ -241,13 +241,21 @@ local function update_signals_all()
       end)
     debug_print("tech_signals_array sorted")
     debug_print(serpent.block(tech_signals_array))
+
+    local any_changes = false
     local new_queue = {}
-    for _, signal in ipairs(tech_signals_array) do
+    for i, signal in ipairs(tech_signals_array) do
+      if force.research_queue[i] ~= signal.name then
+        any_changes = true
+      end
       new_queue[#new_queue+1] = signal.name
     end
-    debug_print("setting research queue")
-    debug_print(serpent.block(new_queue))
-    force.research_queue = new_queue
+
+    if any_changes or #force.research_queue > new_queue then
+      debug_print("setting research queue")
+      debug_print(serpent.block(new_queue))
+      force.research_queue = new_queue
+    end
   end
 end
 
