@@ -1,9 +1,3 @@
-Bugfixes:
-- Don't update the queue if it's already correct (updating it causes some UI flickering).
-- Clean up player state when a player is removed from the game.
-- Preserve state when the building is copy-pasted.
-- Related to the above, support the UI on ghosts.
-
 Features:
 - Allow "output cost" (and other outputs features we add) to get the tech to provide info about from
   the network, instead of requiring it to be set manually by the player.
