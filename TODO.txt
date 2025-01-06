@@ -1,3 +1,9 @@
+Bugs:
+- Undo/redo doesn't work for feature copy-paste.
+- Undo of removing a ghost correctly sets the settings, but undo of removing a real building creates
+  a ghost with empty settings.
+
+
 Features:
 - Allow "output cost" (and other outputs features we add) to get the tech to provide info about from
   the network, instead of requiring it to be set manually by the player.

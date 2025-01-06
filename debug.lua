@@ -1,4 +1,4 @@
-debug = true
+debug = false
 
 function debug_print(string)
   if debug then

@@ -83,44 +83,23 @@ local function create_gui(player)
   }
 end
 
-local function setup_gui(player, window, unit_number)
-  local research_admin_building = storage.research_admin_buildings[unit_number]
-
+local function setup_gui(player, window, unit_number, state_tags, type)
+  local gui_tags = { research_admin_building_unit_number = unit_number, type = type }
   local set_research_checkbox = window["set-research"]["set-research-checkbox"]
-  set_research_checkbox.state = research_admin_building.set_research_checked
-  set_research_checkbox.tags = { research_admin_building_unit_number = unit_number, type = "normal" }
+  set_research_checkbox.state = state_tags.set_research_checked
+  set_research_checkbox.tags = gui_tags
 
   local read_research_checkbox = window["read-research"]["read-research-checkbox"]
-  read_research_checkbox.state = research_admin_building.read_research_checked
-  read_research_checkbox.tags = { research_admin_building_unit_number = unit_number, type = "normal" }
+  read_research_checkbox.state = state_tags.read_research_checked
+  read_research_checkbox.tags = gui_tags
 
   local output_cost_checkbox = window["output-cost"]["output-cost-checkbox"]
-  output_cost_checkbox.state = research_admin_building.output_cost_checked
-  output_cost_checkbox.tags = { research_admin_building_unit_number = unit_number, type = "normal" }
+  output_cost_checkbox.state = state_tags.output_cost_checked
+  output_cost_checkbox.tags = gui_tags
 
   local output_cost_tech_choice = window["output-cost-tech-choice"]
-  output_cost_tech_choice.elem_value = research_admin_building.output_cost_chosen_tech
-  output_cost_tech_choice.tags = { research_admin_building_unit_number = unit_number, type = "normal" }
-end
-
-local function setup_gui_ghost(player, window, unit_number)
-  local ghost = storage.research_admin_building_ghosts[unit_number]
-
-  local set_research_checkbox = window["set-research"]["set-research-checkbox"]
-  set_research_checkbox.state = ghost.tags.set_research_checked
-  set_research_checkbox.tags = { research_admin_building_unit_number = unit_number, type = "ghost" }
-
-  local read_research_checkbox = window["read-research"]["read-research-checkbox"]
-  read_research_checkbox.state = ghost.tags.read_research_checked
-  read_research_checkbox.tags = { research_admin_building_unit_number = unit_number, type = "ghost" }
-
-  local output_cost_checkbox = window["output-cost"]["output-cost-checkbox"]
-  output_cost_checkbox.state = ghost.tags.output_cost_checked
-  output_cost_checkbox.tags = { research_admin_building_unit_number = unit_number, type = "ghost" }
-
-  local output_cost_tech_choice = window["output-cost-tech-choice"]
-  output_cost_tech_choice.elem_value = ghost.tags.output_cost_chosen_tech
-  output_cost_tech_choice.tags = { research_admin_building_unit_number = unit_number, type = "ghost" }
+  output_cost_tech_choice.elem_value = state_tags.output_cost_chosen_tech
+  output_cost_tech_choice.tags = gui_tags
 end
 
 local function tech_signals_of_network(network)
@@ -156,7 +135,7 @@ local function update_signals(research_admin_building)
   local force = entity.force
 
   local tech_signals = nil
-  if research_admin_building.set_research_checked then
+  if research_admin_building.tags.set_research_checked then
     local red_network = entity.get_circuit_network(defines.wire_connector_id.circuit_red)
     local green_network = entity.get_circuit_network(defines.wire_connector_id.circuit_green)
     tech_signals = add_dicts{tech_signals_of_network(red_network),tech_signals_of_network(green_network)}
@@ -164,7 +143,7 @@ local function update_signals(research_admin_building)
 
   local new_filters = {}
 
-  if research_admin_building.read_research_checked then
+  if research_admin_building.tags.read_research_checked then
     local tech = force.current_research
     if tech ~= nil then
       local progress = force.research_progress
@@ -176,8 +155,8 @@ local function update_signals(research_admin_building)
     end
   end
 
-  if research_admin_building.output_cost_checked then
-    local tech_name = research_admin_building.output_cost_chosen_tech
+  if research_admin_building.tags.output_cost_checked then
+    local tech_name = research_admin_building.tags.output_cost_chosen_tech
     if tech_name ~= nil then
       local tech = force.technologies[tech_name]
       local count = tech.research_unit_count
@@ -269,22 +248,16 @@ local function add_research_admin_building(entity, tags)
   debug_print("add_research_admin_building")
   debug_print(entity.unit_number)
   debug_print(entity.name)
-  local set_research_checked = false
-  local read_research_checked = false
-  local output_cost_checked = false
-  local output_cost_chosen_tech = nil
-  if tags then
-    debug_print("tags")
-    set_research_checked = tags.set_research_checked
-    read_research_checked = tags.read_research_checked
-    output_cost_checked = tags.output_cost_checked
-    output_cost_chosen_tech = tags.output_cost_chosen_tech
+  if not tags then
+    tags = {
+      set_research_checked = false,
+      read_research_checked = false,
+      output_cost_checked = false,
+      output_cost_chosen_tech = nil
+    }
   end
   storage.research_admin_buildings[entity.unit_number] = {
-    set_research_checked = set_research_checked,
-    read_research_checked = read_research_checked,
-    output_cost_checked = output_cost_checked,
-    output_cost_chosen_tech = output_cost_chosen_tech,
+    tags = tags or initial_state_tags,
     entity = entity
   }
 end
@@ -305,14 +278,8 @@ local function add_research_admin_building_ghost(entity)
 end
 
 local function copy_research_admin_building(source_unit_number, destination_unit_number)
-  local source = storage.research_admin_buildings[source_unit_number]
-  storage.research_admin_buildings[destination_unit_number] = {
-    set_research_checked = source.set_research_checked,
-    read_research_checked = source.read_research_checked,
-    output_cost_checked = source.output_cost_checked,
-    output_cost_chosen_tech = source.output_cost_chosen_tech,
-    entity = storage.research_admin_buildings[destination_unit_number].entity
-  }
+  storage.research_admin_buildings[destination_unit_number].tags =
+    storage.research_admin_buildings[source_unit_number].tags
 end
 
 local entity_event_filters = {
@@ -328,6 +295,7 @@ local function is_research_admin_building_or_ghost(entity)
 end
 
 local function on_entity_built(event)
+  debug_print(serpent.block{ event_id = event.name, tags = event.tags })
   local entity = event.entity
   debug_print(serpent.block{ tags = event.tags })
   if entity.name == "entity-ghost" then
@@ -337,8 +305,7 @@ local function on_entity_built(event)
   end
 end
 
-local function on_entity_removed(event)
-  local entity = event.entity
+local function on_entity_removed(entity)
   if entity.name == "entity-ghost" then
     storage.research_admin_building_ghosts[entity.unit_number] = nil
   else
@@ -356,6 +323,26 @@ script.on_init(function()
   end
 end)
 
+script.on_configuration_changed(function(changes)
+  this_mod_change = changes.mod_changes["circuit-network-research-management"]
+  if this_mod_change.old_version == "0.0.2" then
+    local research_admin_buildings = {}
+    for unit_number, research_admin_building in pairs(storage.research_admin_buildings) do
+      research_admin_buildings[unit_number] = {
+        tags = {
+          set_research_checked = research_admin_building.set_research_checked,
+          read_research_checked = research_admin_building.read_research_checked,
+          output_cost_checked = research_admin_building.output_cost_checked,
+          output_cost_chosen_tech = research_admin_building.output_cost_chosen_tech,
+         },
+         entity = research_admin_building.entity
+      }
+    end
+    storage.research_admin_buildings = research_admin_buildings
+    storage.research_admin_building_ghosts = {}
+  end
+end)
+
 script.on_event(defines.events.on_player_created, function(event)
   create_gui(game.get_player(event.player_index))
 end)
@@ -369,12 +356,30 @@ script.on_event(defines.events.on_space_platform_built_entity, on_entity_built, 
 -- CR wduff: What, if anything, should we actually do with this event?
 script.on_event(defines.events.script_raised_revive, on_entity_built, entity_event_filters)
 
-script.on_event(defines.events.on_player_mined_entity, on_entity_removed, entity_event_filters)
-script.on_event(defines.events.on_robot_mined_entity, on_entity_removed, entity_event_filters)
-script.on_event(defines.events.on_space_platform_mined_entity, on_entity_removed, entity_event_filters)
-script.on_event(defines.events.on_pre_ghost_deconstructed, on_entity_removed, entity_event_filters)
+script.on_event(defines.events.on_player_mined_entity, function(event)
+  debug_print("on_player_mined_entity")
+  on_entity_removed(event.entity)
+end,
+entity_event_filters)
 
--- CR wduff: Update this.
+script.on_event(defines.events.on_robot_mined_entity, function(event)
+  debug_print("on_robot_mined_entity")
+  on_entity_removed(event.entity)
+end,
+entity_event_filters)
+
+script.on_event(defines.events.on_space_platform_mined_entity, function(event)
+  debug_print("on_space_platform_mined_entity")
+  on_entity_removed(event.entity)
+end,
+entity_event_filters)
+
+script.on_event(defines.events.on_pre_ghost_deconstructed, function(event)
+  debug_print("on_pre_ghost_deconstructed")
+  on_entity_removed(event.ghost)
+end,
+entity_event_filters)
+
 script.on_event(defines.events.on_entity_settings_pasted, function(event)
   local source = event.source
   local destination = event.destination
@@ -397,19 +402,12 @@ script.on_event(defines.events.on_player_setup_blueprint, function(event)
           stack.set_blueprint_entity_tags(i, entity.tags)
         else
           local research_admin_building = storage.research_admin_buildings[entity.unit_number]
-          stack.set_blueprint_entity_tags(i, {
-            set_research_checked = research_admin_building.set_research_checked,
-            read_research_checked = research_admin_building.read_research_checked,
-            output_cost_checked = research_admin_building.output_cost_checked,
-            output_cost_chosen_tech = research_admin_building.output_cost_chosen_tech
-          })
+          stack.set_blueprint_entity_tags(i, research_admin_building.tags)
         end
       end
     end
   end
 end)
-
--- CR wduff: Think about/test undo and redo.
 
 -- CR wduff: Consider cloning the gui before extending it, so we don't have to toggle visibility
 -- every time, and so we can make the logistics section read only.
@@ -423,10 +421,11 @@ script.on_event(defines.events.on_gui_opened, function(event)
     local entity = event.entity
     debug_print(serpent.block{ on_gui_opened = entity.name })
     if is_research_admin_building_or_ghost(entity) then
+      local unit_number = entity.unit_number
       if entity.name == "entity-ghost" then
-        setup_gui_ghost(player, window, entity.unit_number)
+        setup_gui(player, window, unit_number, storage.research_admin_building_ghosts[unit_number].tags, "ghost")
       else
-        setup_gui(player, window, entity.unit_number)
+        setup_gui(player, window, unit_number, storage.research_admin_buildings[unit_number].tags, "normal")
       end
       window.visible = true
     else
@@ -447,7 +446,7 @@ script.on_event(defines.events.on_gui_checked_state_changed, function(event)
       tags.set_research_checked = element.state
       storage.research_admin_building_ghosts[unit_number].tags = tags
     else
-      storage.research_admin_buildings[unit_number].set_research_checked = element.state
+      storage.research_admin_buildings[unit_number].tags.set_research_checked = element.state
     end
   end
 
@@ -459,7 +458,7 @@ script.on_event(defines.events.on_gui_checked_state_changed, function(event)
       tags.read_research_checked = element.state
       storage.research_admin_building_ghosts[unit_number].tags = tags
     else
-      storage.research_admin_buildings[unit_number].read_research_checked = element.state
+      storage.research_admin_buildings[unit_number].tags.read_research_checked = element.state
     end
   end
 
@@ -471,7 +470,7 @@ script.on_event(defines.events.on_gui_checked_state_changed, function(event)
       tags.output_cost_checked = element.state
       storage.research_admin_building_ghosts[unit_number].tags = tags
     else
-      storage.research_admin_buildings[unit_number].output_cost_checked = element.state
+      storage.research_admin_buildings[unit_number].tags.output_cost_checked = element.state
     end
   end
 end)
@@ -487,7 +486,7 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
       tags.output_cost_chosen_tech = element.elem_value
       storage.research_admin_building_ghosts[unit_number].tags = tags
     else
-      storage.research_admin_buildings[unit_number].output_cost_chosen_tech = element.elem_value
+      storage.research_admin_buildings[unit_number].tags.output_cost_chosen_tech = element.elem_value
     end
   end
 end)
