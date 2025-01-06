@@ -1,4 +1,4 @@
-require("debug")
+local debug = false
 
 local tech_item_group = {
   -- PrototypeBase
