@@ -11,6 +11,8 @@ Features:
 - Make the refresh rate configurable.
 - Synchronously update on some events, such as research finished.
 - Output previous research
+- Allow users to select a generic-named tech for finite multi-level tech as well (this already works
+  for infinite tech), and allow queueing the fixed lower-level tech via the generic-named tech.
 
 Support more outputs about a given research:
 - current level

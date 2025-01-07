@@ -7,8 +7,7 @@ local function debug_print(string)
   end
 end
 
--- CR wduff: Add tooltips.
-local function add_checkbox_with_signal_choice(parent, name, caption, default_signal)
+local function add_checkbox_with_signal_choice(parent, name, caption, default_signal, tooltip)
   local flow = parent.add{
     type = "flow",
     name = name .. "-flow",
@@ -22,6 +21,7 @@ local function add_checkbox_with_signal_choice(parent, name, caption, default_si
     caption = caption,
     state = false,
     enabled = false,
+    tooltip = tooltip
   }
 
   flow.add{
@@ -72,6 +72,7 @@ local function create_gui(player)
     name = "set-research",
     caption = "Set research",
     state = false,
+    tooltip = "Set the research queue based on the Technology circuit network signals coming into this building.\nQueue order is in descending order of signal value.\nIf multiple buildings are operating in this mode, their signals values will be summed before determining queue order."
   }
 
   window.add{
@@ -84,6 +85,7 @@ local function create_gui(player)
     name = "read-research",
     caption = "Read current research",
     state = false,
+    tooltip = "Read the currently researching technology and output it to the circuit network with a value of 1."
   }
 
   window.add{
@@ -103,6 +105,7 @@ local function create_gui(player)
     name = "output-info",
     caption = "Output technology info for",
     state = false,
+    tooltip = "Output various information about the specified technology to the circuit network.\nThe outputs are controlled by the checkboxes below."
   }
 
   choose_elem_flow.add{
@@ -119,7 +122,8 @@ local function create_gui(player)
     style = "caption_label"
   }
 
-  add_checkbox_with_signal_choice(window, "output_unit_count", "# of units needed to research", "signal-U")
+  add_checkbox_with_signal_choice(window, "output_unit_count", "# of units needed to research", "signal-U",
+    "Output the total number of units of research required to research this technology, i.e. the \"x N\" in the research UI.\nThis doesn't take into account current progress.")
 
   window.add{
     type = "checkbox",
@@ -127,13 +131,17 @@ local function create_gui(player)
     caption = "Unit ingredients",
     state = false,
     enabled = false,
+    tooltip = "Output the ingredients required to process one unit of research for this technology.\nThis is usually 1 each of a collection science packs.\nFor trigger-based technologies, this will output nothing."
   }
 
-  add_checkbox_with_signal_choice(window, "output_unit_energy", "Seconds per unit", "signal-T")
+  add_checkbox_with_signal_choice(window, "output_unit_energy", "Seconds per unit", "signal-T",
+    "Output the time it takes to do one unit of research for this technology, in seconds, not accounting for speed bonuses.")
 
-  add_checkbox_with_signal_choice(window, "output_progress", "Progress (out of 10000)", "signal-P")
+  add_checkbox_with_signal_choice(window, "output_progress", "Progress (out of 10000)", "signal-P",
+    "Output the current progress towards researching this technology, rounded down to the nearest 10000th, as a number from 0 to 10000.")
 
-  add_checkbox_with_signal_choice(window, "output_researched", "Researched", "signal-R")
+  add_checkbox_with_signal_choice(window, "output_researched", "Researched", "signal-R",
+    "Output 1 if the technology is researched.\nFor infinite technologies, output the level researched so far.")
 
   window.add{
     type = "checkbox",
@@ -141,6 +149,7 @@ local function create_gui(player)
     caption = "Prerequisite technologies",
     state = false,
     enabled = false,
+    tooltip = "Output the technologies that are direct prerequisites of this (with a value of 1)."
   }
 
   window.add{
@@ -149,6 +158,7 @@ local function create_gui(player)
     caption = "Successor technologies",
     state = false,
     enabled = false,
+    tooltip = "Output the technologies that are direct successors of this (with a value of 1)."
   }
 
   window.add{
@@ -157,6 +167,7 @@ local function create_gui(player)
     caption = "Products unlocked",
     state = false,
     enabled = false,
+    tooltip = "Output the products that can be produced by recipes unlocked by this research.\nThis doesn't account for the fact that there may be earlier ways to acquire the products."
   }
 end
 
@@ -282,9 +293,15 @@ local function update_signals(research_admin_building)
 
       if state_tags.output_progress and state_tags.output_progress_signal_choice then
         local signal = state_tags.output_progress_signal_choice
+        local progress = 0
+        if tech.researched then
+          progress = 10000
+        else
+          progress = math.floor(tech.saved_progress * 10000)
+        end
         new_filters[#new_filters+1] = {
           value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-          min = math.floor(tech.saved_progress * 10000)
+          min = progress
         }
       end
 
@@ -292,6 +309,7 @@ local function update_signals(research_admin_building)
         local signal = state_tags.output_researched_signal_choice
 
         -- CR wduff: Update this to include the level.
+        -- CR wduff: What does this do for infinite research?
         local researched = 0
         if tech.researched then
           researched = 1
@@ -453,15 +471,15 @@ end
 local function copy_research_admin_building(source, destination)
   local source_tags = nil
   if source.name == "entity-ghost" then
-    source_tags = storage.research_admin_building_ghosts[source_unit_number].tags
+    source_tags = storage.research_admin_building_ghosts[source.unit_number].tags
   else
-    source_tags = storage.research_admin_buildings[source_unit_number].tags
+    source_tags = storage.research_admin_buildings[source.unit_number].tags
   end
 
   if destination.name == "entity-ghost" then
-    storage.research_admin_building_ghosts[destination_unit_number].tags = source_tags
+    storage.research_admin_building_ghosts[destination.unit_number].tags = source_tags
   else
-    storage.research_admin_buildings[destination_unit_number].tags = source_tags
+    storage.research_admin_buildings[destination.unit_number].tags = source_tags
   end
 end
 
@@ -506,6 +524,7 @@ script.on_init(function()
   end
 end)
 
+-- CR wduff: Add upgrade logic for 0.0.5
 script.on_configuration_changed(function(changes)
   this_mod_change = changes.mod_changes["circuit-network-research-management"]
   if this_mod_change.old_version == "0.0.2" then
@@ -617,6 +636,16 @@ script.on_event(defines.events.on_gui_opened, function(event)
   end
 end)
 
+local function set_tag(unit_number, type, tag_name, value)
+  if type == "ghost" then
+    local tags = storage.research_admin_building_ghosts[unit_number].tags
+    tags[tag_name] = value
+    storage.research_admin_building_ghosts[unit_number].tags = tags
+  else
+    storage.research_admin_buildings[unit_number].tags[tag_name] = value
+  end
+end
+
 script.on_event(defines.events.on_gui_checked_state_changed, function(event)
   local element = event.element
 
@@ -626,26 +655,12 @@ script.on_event(defines.events.on_gui_checked_state_changed, function(event)
 
     if element.type == "radiobutton" and element.state then
       local window = game.get_player(event.player_index).gui.relative["research-admin-building-circuit-settings-window"]
-      -- CR wduff: Make a shared function for tag update?
-      if type == "ghost" then
-        local tags = storage.research_admin_building_ghosts[unit_number].tags
-        tags.mode_of_operation = element.name
-        storage.research_admin_building_ghosts[unit_number].tags = tags
-        setup_gui(window, unit_number, "ghost")
-      else
-        storage.research_admin_buildings[unit_number].tags.mode_of_operation = element.name
-        setup_gui(window, unit_number, "normal")
-      end
+      set_tag(unit_number, type, "mode_of_operation", element.name)
+      setup_gui(window, unit_number, type)
     end
 
     if element.type == "checkbox" then
-      if type == "ghost" then
-        local tags = storage.research_admin_building_ghosts[unit_number].tags
-        tags[element.name] = element.state
-        storage.research_admin_building_ghosts[unit_number].tags = tags
-      else
-        storage.research_admin_buildings[unit_number].tags[element.name] = element.state
-      end
+      set_tag(unit_number, type, element.name, element.state)
     end
   end
 end)
@@ -656,13 +671,7 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
   if element.get_mod() == "circuit-network-research-management" then
     local unit_number = element.tags.research_admin_building_unit_number
     local type = element.tags.type
-    if type == "ghost" then
-      local tags = storage.research_admin_building_ghosts[unit_number].tags
-      tags[element.name] = element.elem_value
-      storage.research_admin_building_ghosts[unit_number].tags = tags
-    else
-      storage.research_admin_buildings[unit_number].tags[element.name] = element.elem_value
-    end
+    set_tag(unit_number, type, element.name, element.elem_value)
   end
 end)
 
