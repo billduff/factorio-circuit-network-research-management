@@ -1,8 +1,7 @@
 Bugs:
 - Undo/redo doesn't work for feature copy-paste.
-- Undo of removing a ghost correctly sets the settings, but undo of removing a real building creates
-  a ghost with empty settings.
-
+- Undo of removal of a ghost correctly sets the settings, but undo of removal of a real building
+  creates a ghost with empty settings.
 
 Features:
 - Allow "output cost" (and other outputs features we add) to get the tech to provide info about from
@@ -23,4 +22,3 @@ Support more outputs about a given research:
 - split up num units required and cost per unit (instead of the multiple of those we do now)
 - triggers for trigger-based research, which don't have a unit cost
 - whether the research is not available/available/in progress/complete
-- amount of progress made (we do this now, but only for the current research)

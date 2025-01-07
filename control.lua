@@ -1,9 +1,39 @@
-local debug = false
+-- CR wduff: Set debug false.
+local debug = true
 
-function debug_print(string)
+local function debug_print(string)
   if debug then
     game.print(string, { skip = defines.print_skip.never })
   end
+end
+
+-- CR wduff: Add tooltips.
+local function add_checkbox_with_signal_choice(parent, name, caption, default_signal)
+  local flow = parent.add{
+    type = "flow",
+    name = name .. "-flow",
+    direction = "horizontal",
+    style = "player_input_horizontal_flow"
+  }
+
+  flow.add{
+    type = "checkbox",
+    name = name,
+    caption = caption,
+    state = false,
+    enabled = false,
+  }
+
+  flow.add{
+    type = "choose-elem-button",
+    name = name .. "_signal_choice",
+    style = "slot_button_in_shallow_frame",
+    elem_type = "signal",
+    signal = { type = "virtual", name = default_signal },
+    enabled = false,
+  }
+
+  return flow
 end
 
 local function create_gui(player)
@@ -18,94 +48,158 @@ local function create_gui(player)
     }
   }
 
-  local set_research = window.add{
-    type = "flow",
+  local window = window.add{
+    type = "frame",
+    name = "research-admin-building-circuit-settings-window-inset",
+    direction = "vertical",
+    style = "inside_shallow_frame_with_padding"
+  }
+
+  window.add{
+    type = "radiobutton",
+    name = "none",
+    caption = "None",
+    state = true,
+  }
+
+  window.add{
+    type = "line",
+    name = "line1"
+  }
+
+  window.add{
+    type = "radiobutton",
     name = "set-research",
-    direction = "horizontal"
-  }
-
-  set_research.add{
-    type = "checkbox",
-    name = "set-research-checkbox",
-    state = false
-  }
-
-  set_research.add{
-    type = "label",
-    name = "set-research-label",
     caption = "Set research",
+    state = false,
   }
 
   window.add{
     type = "line",
-    name = "line1",
+    name = "line2"
   }
 
-  local read_research = window.add{
-    type = "flow",
+  window.add{
+    type = "radiobutton",
     name = "read-research",
-    direction = "horizontal"
-  }
-
-  read_research.add{
-    type = "checkbox",
-    name = "read-research-checkbox",
-    state = false
-  }
-
-  read_research.add{
-    type = "label",
-    name = "read-research-label",
-    caption = "Read current research"
+    caption = "Read current research",
+    state = false,
   }
 
   window.add{
     type = "line",
-    name = "line2",
+    name = "line3"
   }
 
-  local output_cost = window.add{
+  local choose_elem_flow = window.add{
     type = "flow",
-    name = "output-cost",
-    direction = "horizontal"
+    name = "choose-elem-flow",
+    direction = "horizontal",
+    style = "player_input_horizontal_flow"
   }
 
-  output_cost.add{
-    type = "checkbox",
-    name = "output-cost-checkbox",
-    state = false
+  -- CR wduff: This breaks my "traverse the parent" hack...
+  choose_elem_flow.add{
+    type = "radiobutton",
+    name = "output-info",
+    caption = "Output technology info for",
+    state = false,
   }
 
-  output_cost.add{
-    type = "label",
-    name = "output-cost-label",
-    caption = "Output cost"
+  choose_elem_flow.add{
+    type = "choose-elem-button",
+    name = "output_info_tech_choice",
+    style = "slot_button_in_shallow_frame",
+    elem_type = "technology"
   }
 
   window.add{
-    type = "choose-elem-button",
-    name = "output-cost-tech-choice",
-    elem_type = "technology"
+    type = "label",
+    name = "outputs-label",
+    caption = "Outputs",
+    style = "caption_label"
+  }
+
+  add_checkbox_with_signal_choice(window, "output_unit_count", "# of units needed to research", "signal-U")
+
+  window.add{
+    type = "checkbox",
+    name = "output_unit_ingredients",
+    caption = "Unit ingredients",
+    state = false,
+    enabled = false,
+  }
+
+  add_checkbox_with_signal_choice(window, "output_unit_energy", "Seconds per unit", "signal-T")
+
+  add_checkbox_with_signal_choice(window, "output_progress", "Progress (out of 10000)", "signal-P")
+
+  add_checkbox_with_signal_choice(window, "output_researched", "Researched", "signal-R")
+
+  window.add{
+    type = "checkbox",
+    name = "output_prereqs",
+    caption = "Prerequisite technologies",
+    state = false,
+    enabled = false,
+  }
+
+  window.add{
+    type = "checkbox",
+    name = "output_successors",
+    caption = "Successor technologies",
+    state = false,
+    enabled = false,
+  }
+
+  window.add{
+    type = "checkbox",
+    name = "output_unlocks",
+    caption = "Products unlocked",
+    state = false,
+    enabled = false,
   }
 end
 
-local function setup_gui(player, window, unit_number, state_tags, type)
+local function iter_gui_elt_descendants(gui_elt, func)
+  func(gui_elt)
+  for _, child in ipairs(gui_elt.children) do
+    iter_gui_elt_descendants(child, func)
+  end
+end
+
+local function setup_gui(window, unit_number, type)
+  local state_tags = nil
+  if type == "ghost" then
+    state_tags = storage.research_admin_building_ghosts[unit_number].tags
+  else
+    state_tags = storage.research_admin_buildings[unit_number].tags
+  end
+
   local gui_tags = { research_admin_building_unit_number = unit_number, type = type }
-  local set_research_checkbox = window["set-research"]["set-research-checkbox"]
-  set_research_checkbox.state = state_tags.set_research_checked
-  set_research_checkbox.tags = gui_tags
 
-  local read_research_checkbox = window["read-research"]["read-research-checkbox"]
-  read_research_checkbox.state = state_tags.read_research_checked
-  read_research_checkbox.tags = gui_tags
+  iter_gui_elt_descendants(window, function(gui_elt)
+    if gui_elt.type == "radiobutton" then
+      if state_tags.mode_of_operation == gui_elt.name then
+        gui_elt.state = true
+      else
+        gui_elt.state = false
+      end
+      gui_elt.tags = gui_tags
+    end
 
-  local output_cost_checkbox = window["output-cost"]["output-cost-checkbox"]
-  output_cost_checkbox.state = state_tags.output_cost_checked
-  output_cost_checkbox.tags = gui_tags
+    if gui_elt.type == "checkbox" then
+      gui_elt.enabled = state_tags.mode_of_operation == "output-info"
+      gui_elt.state = state_tags[gui_elt.name]
+      gui_elt.tags = gui_tags
+    end
 
-  local output_cost_tech_choice = window["output-cost-tech-choice"]
-  output_cost_tech_choice.elem_value = state_tags.output_cost_chosen_tech
-  output_cost_tech_choice.tags = gui_tags
+    if gui_elt.type == "choose-elem-button" then
+      gui_elt.enabled = state_tags.mode_of_operation == "output-info"
+      gui_elt.elem_value = state_tags[gui_elt.name]
+      gui_elt.tags = gui_tags
+    end
+  end)
 end
 
 local function tech_signals_of_network(network)
@@ -139,9 +233,10 @@ end
 local function update_signals(research_admin_building)
   local entity = research_admin_building.entity
   local force = entity.force
+  local state_tags = research_admin_building.tags
 
   local tech_signals = nil
-  if research_admin_building.tags.set_research_checked then
+  if state_tags.mode_of_operation == "set-research" then
     local red_network = entity.get_circuit_network(defines.wire_connector_id.circuit_red)
     local green_network = entity.get_circuit_network(defines.wire_connector_id.circuit_green)
     tech_signals = add_dicts{tech_signals_of_network(red_network),tech_signals_of_network(green_network)}
@@ -149,28 +244,92 @@ local function update_signals(research_admin_building)
 
   local new_filters = {}
 
-  if research_admin_building.tags.read_research_checked then
+  if state_tags.mode_of_operation == "read-research" then
     local tech = force.current_research
     if tech ~= nil then
-      local progress = force.research_progress
-      local progress_int = math.ceil(progress * 100)
-      if progress_int == 0 then
-        progress_int = 1
-      end
-      new_filters[#new_filters+1] = { value = tech.name; min = progress_int }
+      new_filters[#new_filters+1] = { value = tech.name, min = 1 }
     end
   end
 
-  if research_admin_building.tags.output_cost_checked then
-    local tech_name = research_admin_building.tags.output_cost_chosen_tech
+  if state_tags.mode_of_operation == "output-info" then
+    local tech_name = state_tags.output_info_tech_choice
     if tech_name ~= nil then
       local tech = force.technologies[tech_name]
-      local count = tech.research_unit_count
-      for _, item in ipairs(tech.research_unit_ingredients) do
+
+      if state_tags.output_unit_count and state_tags.output_unit_count_signal_choice then
+        local signal = state_tags.output_unit_count_signal_choice
         new_filters[#new_filters+1] = {
-          value = { type = item.type, name = item.name, quality = "normal", comparator = "=" },
-          min = item.amount * count
+          value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
+          min = tech.research_unit_count
         }
+      end
+
+      if state_tags.output_unit_ingredients then
+        for _, item in ipairs(tech.research_unit_ingredients) do
+          new_filters[#new_filters+1] = {
+            value = { type = item.type, name = item.name, quality = "normal", comparator = "=" },
+            min = item.amount
+          }
+        end
+      end
+
+      if state_tags.output_unit_energy and state_tags.output_unit_energy_signal_choice then
+        local signal = state_tags.output_unit_energy_signal_choice
+        new_filters[#new_filters+1] = {
+          value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
+          min = math.floor(tech.research_unit_energy)
+        }
+      end
+
+      if state_tags.output_progress and state_tags.output_progress_signal_choice then
+        local signal = state_tags.output_progress_signal_choice
+        new_filters[#new_filters+1] = {
+          value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
+          min = math.floor(tech.saved_progress * 10000)
+        }
+      end
+
+      if state_tags.output_researched and state_tags.output_researched_signal_choice then
+        local signal = state_tags.output_researched_signal_choice
+
+        -- CR wduff: Update this to include the level.
+        local researched = 0
+        if tech.researched then
+          researched = 1
+        end
+
+        -- A zero signal has the same circuit-network effect as no signal but we create it anyway
+        -- because it makes it easier for the use to see that it's working.
+        new_filters[#new_filters+1] = {
+          value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
+          min = researched
+        }
+      end
+
+      if state_tags.output_prereqs then
+        for tech_name, _ in pairs(tech.prerequisites) do
+          new_filters[#new_filters+1] = { value = tech_name, min = 1 }
+        end
+      end
+
+      if state_tags.output_successors then
+        for tech_name, _ in pairs(tech.successors) do
+          new_filters[#new_filters+1] = { value = tech_name, min = 1 }
+        end
+      end
+
+      if state_tags.output_unlocks then
+        for _, effect in ipairs(tech.prototype.effects) do
+          if effect.type == "unlock-recipe" then
+            local recipe = prototypes.recipe[effect.recipe]
+            for _, product in ipairs(recipe.products) do
+              new_filters[#new_filters+1] = {
+                value = { type = product.type, name = product.name, quality = "normal", comparator = "=" },
+                min = 1
+              }
+            end
+          end
+        end
       end
     end
   end
@@ -250,17 +409,31 @@ local function update_signals_all()
   end
 end
 
+local function initial_state_tags()
+  return {
+    mode_of_operation = "none",
+    output_unit_count = false,
+    output_unit_ingredients = false,
+    output_unit_energy = false,
+    output_progress = false,
+    output_researched = false,
+    output_prereqs = false,
+    output_successors = false,
+    output_unlocks = false,
+    output_info_tech_choice = nil,
+    output_unit_count_signal_choice = { type = "virtual", name = "signal-U" },
+    output_unit_energy_signal_choice = { type = "virtual", name = "signal-T" },
+    output_progress_signal_choice = { type = "virtual", name = "signal-P" },
+    output_researched_signal_choice = { type = "virtual", name = "signal-R" },
+  }
+end
+
 local function add_research_admin_building(entity, tags)
   debug_print("add_research_admin_building")
   debug_print(entity.unit_number)
   debug_print(entity.name)
   if not tags then
-    tags = {
-      set_research_checked = false,
-      read_research_checked = false,
-      output_cost_checked = false,
-      output_cost_chosen_tech = nil
-    }
+    tags = initial_state_tags()
   end
   storage.research_admin_buildings[entity.unit_number] = {
     tags = tags or initial_state_tags,
@@ -274,16 +447,12 @@ local function add_research_admin_building_ghost(entity)
   debug_print(entity.name)
   storage.research_admin_building_ghosts[entity.unit_number] = entity
   if not entity.tags then
-    entity.tags = {
-      set_research_checked = false,
-      read_research_checked = false,
-      output_cost_checked = false,
-      output_cost_chosen_tech = nil
-    }
+    entity.tags = initial_state_tags()
   end
 end
 
 local function copy_research_admin_building(source_unit_number, destination_unit_number)
+  -- CR wduff: Need to use different tables for ghosts.
   storage.research_admin_buildings[destination_unit_number].tags =
     storage.research_admin_buildings[source_unit_number].tags
 end
@@ -429,9 +598,9 @@ script.on_event(defines.events.on_gui_opened, function(event)
     if is_research_admin_building_or_ghost(entity) then
       local unit_number = entity.unit_number
       if entity.name == "entity-ghost" then
-        setup_gui(player, window, unit_number, storage.research_admin_building_ghosts[unit_number].tags, "ghost")
+        setup_gui(window, unit_number, "ghost")
       else
-        setup_gui(player, window, unit_number, storage.research_admin_buildings[unit_number].tags, "normal")
+        setup_gui(window, unit_number, "normal")
       end
       window.visible = true
     else
@@ -442,41 +611,33 @@ end)
 
 script.on_event(defines.events.on_gui_checked_state_changed, function(event)
   local element = event.element
-  local name = element.name
 
-  if name == "set-research-checkbox" then
+  if element.get_mod() == "circuit-network-research-management" then
     local unit_number = element.tags.research_admin_building_unit_number
     local type = element.tags.type
-    if type == "ghost" then
-      local tags = storage.research_admin_building_ghosts[unit_number].tags
-      tags.set_research_checked = element.state
-      storage.research_admin_building_ghosts[unit_number].tags = tags
-    else
-      storage.research_admin_buildings[unit_number].tags.set_research_checked = element.state
+
+    if element.type == "radiobutton" and element.state then
+      local window = game.get_player(event.player_index).gui.relative["research-admin-building-circuit-settings-window"]
+      -- CR wduff: Make a shared function for tag update?
+      if type == "ghost" then
+        local tags = storage.research_admin_building_ghosts[unit_number].tags
+        tags.mode_of_operation = element.name
+        storage.research_admin_building_ghosts[unit_number].tags = tags
+        setup_gui(window, unit_number, "ghost")
+      else
+        storage.research_admin_buildings[unit_number].tags.mode_of_operation = element.name
+        setup_gui(window, unit_number, "normal")
+      end
     end
-  end
 
-  if name == "read-research-checkbox" then
-    local unit_number = element.tags.research_admin_building_unit_number
-    local type = element.tags.type
-    if type == "ghost" then
-      local tags = storage.research_admin_building_ghosts[unit_number].tags
-      tags.read_research_checked = element.state
-      storage.research_admin_building_ghosts[unit_number].tags = tags
-    else
-      storage.research_admin_buildings[unit_number].tags.read_research_checked = element.state
-    end
-  end
-
-  if name == "output-cost-checkbox" then
-    local unit_number = element.tags.research_admin_building_unit_number
-    local type = element.tags.type
-    if type == "ghost" then
-      local tags = storage.research_admin_building_ghosts[unit_number].tags
-      tags.output_cost_checked = element.state
-      storage.research_admin_building_ghosts[unit_number].tags = tags
-    else
-      storage.research_admin_buildings[unit_number].tags.output_cost_checked = element.state
+    if element.type == "checkbox" then
+      if type == "ghost" then
+        local tags = storage.research_admin_building_ghosts[unit_number].tags
+        tags[element.name] = element.state
+        storage.research_admin_building_ghosts[unit_number].tags = tags
+      else
+        storage.research_admin_buildings[unit_number].tags[element.name] = element.state
+      end
     end
   end
 end)
@@ -484,15 +645,15 @@ end)
 script.on_event(defines.events.on_gui_elem_changed, function(event)
   local element = event.element
 
-  if element.name == "output-cost-tech-choice" then
+  if element.get_mod() == "circuit-network-research-management" then
     local unit_number = element.tags.research_admin_building_unit_number
     local type = element.tags.type
     if type == "ghost" then
       local tags = storage.research_admin_building_ghosts[unit_number].tags
-      tags.output_cost_chosen_tech = element.elem_value
+      tags[element.name] = element.elem_value
       storage.research_admin_building_ghosts[unit_number].tags = tags
     else
-      storage.research_admin_buildings[unit_number].tags.output_cost_chosen_tech = element.elem_value
+      storage.research_admin_buildings[unit_number].tags[element.name] = element.elem_value
     end
   end
 end)
