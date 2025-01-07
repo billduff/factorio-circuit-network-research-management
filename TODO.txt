@@ -9,16 +9,11 @@ Features:
 - Output a pulse signal when a research finishes.
 - Allow specifying the level of an infinite research?
 - Make the refresh rate configurable.
-- Refresh on some events, such as research finished.
+- Synchronously update on some events, such as research finished.
 - Output previous research
 
 Support more outputs about a given research:
-- time cost
 - current level
 - max level?
-- pre-req and successor tech
-- recipes unlocked (or maybe just items and fluids those recipes produce, since there aren't recipe
-  signals in the base game)
-- split up num units required and cost per unit (instead of the multiple of those we do now)
 - triggers for trigger-based research, which don't have a unit cost
-- whether the research is not available/available/in progress/complete
+- If there is some good recipe-signal mod, add recipes unlocked when that mod is present.

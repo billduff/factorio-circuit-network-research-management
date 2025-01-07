@@ -98,7 +98,6 @@ local function create_gui(player)
     style = "player_input_horizontal_flow"
   }
 
-  -- CR wduff: This breaks my "traverse the parent" hack...
   choose_elem_flow.add{
     type = "radiobutton",
     name = "output-info",
@@ -451,10 +450,19 @@ local function add_research_admin_building_ghost(entity)
   end
 end
 
-local function copy_research_admin_building(source_unit_number, destination_unit_number)
-  -- CR wduff: Need to use different tables for ghosts.
-  storage.research_admin_buildings[destination_unit_number].tags =
-    storage.research_admin_buildings[source_unit_number].tags
+local function copy_research_admin_building(source, destination)
+  local source_tags = nil
+  if source.name == "entity-ghost" then
+    source_tags = storage.research_admin_building_ghosts[source_unit_number].tags
+  else
+    source_tags = storage.research_admin_buildings[source_unit_number].tags
+  end
+
+  if destination.name == "entity-ghost" then
+    storage.research_admin_building_ghosts[destination_unit_number].tags = source_tags
+  else
+    storage.research_admin_buildings[destination_unit_number].tags = source_tags
+  end
 end
 
 local entity_event_filters = {
@@ -563,7 +571,7 @@ script.on_event(defines.events.on_entity_settings_pasted, function(event)
     destination = { name = destination.name, unit_number = destination.unit_number }
   }))
   if is_research_admin_building_or_ghost(source) and is_research_admin_building_or_ghost(destination) then
-    copy_research_admin_building(source.unit_number, destination.unit_number)
+    copy_research_admin_building(source, destination)
   end
 end)
 
