@@ -72,7 +72,7 @@ local function create_gui(player)
     name = "set-research",
     caption = "Set research",
     state = false,
-    tooltip = "Set the research queue based on the Technology circuit network signals coming into this building.\nQueue order is in descending order of signal value.\nIf multiple buildings are operating in this mode, their signals values will be summed before determining queue order."
+    tooltip = "Set the research queue based on the Technology circuit network signals coming into this building.\nQueue order is in descending order of signal value.\nResearched or unavailable technology is ignored.\nIf multiple buildings are operating in this mode, their signals values will be summed before determining queue order."
   }
 
   window.add{
@@ -112,7 +112,8 @@ local function create_gui(player)
     type = "choose-elem-button",
     name = "output_info_tech_choice",
     style = "slot_button_in_shallow_frame",
-    elem_type = "technology"
+    elem_type = "technology",
+    elem_filters = {}
   }
 
   window.add{
@@ -240,6 +241,10 @@ local function add_dicts(dicts)
   return res
 end
 
+local function is_multi_level_tech(tech)
+  return tech.prototype.level ~= tech.prototype.max_level
+end
+
 local function update_signals(research_admin_building)
   local entity = research_admin_building.entity
   local force = entity.force
@@ -287,7 +292,7 @@ local function update_signals(research_admin_building)
         local signal = state_tags.output_unit_energy_signal_choice
         new_filters[#new_filters+1] = {
           value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-          min = math.floor(tech.research_unit_energy)
+          min = math.floor(tech.research_unit_energy/60)
         }
       end
 
@@ -308,11 +313,31 @@ local function update_signals(research_admin_building)
       if state_tags.output_researched and state_tags.output_researched_signal_choice then
         local signal = state_tags.output_researched_signal_choice
 
-        -- CR wduff: Update this to include the level.
-        -- CR wduff: What does this do for infinite research?
         local researched = 0
-        if tech.researched then
-          researched = 1
+        if is_multi_level_tech(tech) then
+          if tech.researched then
+            researched = tech.level
+          else
+            local level_to_check = tech.level - 1
+            local starting_level = tech.prototype.level
+            if level_to_check >= starting_level then
+              researched = level_to_check
+            else
+              local name_without_level = tech.name:gsub("-" .. starting_level, "")
+              while level_to_check > 0 do
+                if force.technologies[name_without_level .. "-" .. level_to_check].researched then
+                  break
+                else
+                  level_to_check = level_to_check - 1
+                end
+              end
+              researched = level_to_check
+            end
+          end
+        else
+          if tech.researched then
+            researched = 1
+          end
         end
 
         -- A zero signal has the same circuit-network effect as no signal but we create it anyway
@@ -369,11 +394,6 @@ local function update_signals(research_admin_building)
   return force, tech_signals
 end
 
--- CR wduff: This comment is no longer accurate.
--- We read and write circuit network state once every ~half second, as well as any time something
--- happens to the research queue, and just after any updates to a research admin building. This way
--- it feels snappy around interesting events, and isn't too slow around circuit network updates,
--- without doing work on every tick.
 local function update_signals_all()
   local all_tech_signals = {}
 
@@ -409,6 +429,8 @@ local function update_signals_all()
         end
       end)
 
+    -- CR wduff: [any_changes] needs to take into account whether some reasearch in the new queue is
+    -- unavailable
     local any_changes = false
     local new_queue = {}
     for i, signal in ipairs(tech_signals_array) do
