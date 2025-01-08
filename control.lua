@@ -394,11 +394,28 @@ local function update_signals(research_admin_building)
   return force, tech_signals
 end
 
+local function can_research(tech)
+  if tech == nil
+     or not tech.enabled
+     or tech.researched
+     or tech.prototype.research_trigger ~= nil
+  then
+    return false
+  end
+
+  for _, prereq in pairs(tech.prerequisites) do
+    if not prereq.researched then
+      return false
+    end
+  end
+
+  return true
+end
+
 local function update_signals_all()
   local all_tech_signals = {}
 
   for _, research_admin_building in pairs(storage.research_admin_buildings) do
-    -- CR wduff: Why do I need this validity check?
     if research_admin_building.entity.valid then
       local force, tech_signals = update_signals(research_admin_building)
       if tech_signals then
@@ -417,7 +434,11 @@ local function update_signals_all()
     local tech_signals = tech_signals_for_force.signals
     local tech_signals_array = {}
     for name, count in pairs(tech_signals) do
-      tech_signals_array[#tech_signals_array+1] = { name = name, count = count }
+      -- The game will ignore invalid research requests, but we filter anyway so that the
+      -- [any_changes] check below is accurate.
+      if can_research(force.technologies[name]) then
+        tech_signals_array[#tech_signals_array+1] = { name = name, count = count }
+      end
     end
     table.sort(
       tech_signals_array,
@@ -429,8 +450,6 @@ local function update_signals_all()
         end
       end)
 
-    -- CR wduff: [any_changes] needs to take into account whether some reasearch in the new queue is
-    -- unavailable
     local any_changes = false
     local new_queue = {}
     for i, signal in ipairs(tech_signals_array) do
@@ -658,6 +677,14 @@ script.on_event(defines.events.on_gui_opened, function(event)
   end
 end)
 
+local function unit_number_is_valid(unit_number, type)
+    if type == ghost then
+      return research_admin_builing_ghosts[unit_number] ~= nil
+    else
+      return research_admin_builings[unit_number] ~= nil
+    end
+end
+
 local function set_tag(unit_number, type, tag_name, value)
   if type == "ghost" then
     local tags = storage.research_admin_building_ghosts[unit_number].tags
@@ -674,6 +701,10 @@ script.on_event(defines.events.on_gui_checked_state_changed, function(event)
   if element.get_mod() == "circuit-network-research-management" then
     local unit_number = element.tags.research_admin_building_unit_number
     local type = element.tags.type
+
+    if not unit_number_is_valid(unit_number, type) then
+      return
+    end
 
     if element.type == "radiobutton" and element.state then
       local window = game.get_player(event.player_index).gui.relative["research-admin-building-circuit-settings-window"]
@@ -693,6 +724,11 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
   if element.get_mod() == "circuit-network-research-management" then
     local unit_number = element.tags.research_admin_building_unit_number
     local type = element.tags.type
+
+    if not unit_number_is_valid(unit_number, type) then
+      return
+    end
+
     set_tag(unit_number, type, element.name, element.elem_value)
   end
 end)
