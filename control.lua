@@ -250,10 +250,11 @@ local function update_signals(research_admin_building)
   local force = entity.force
   local state_tags = research_admin_building.tags
 
+  local red_network = entity.get_circuit_network(defines.wire_connector_id.circuit_red)
+  local green_network = entity.get_circuit_network(defines.wire_connector_id.circuit_green)
+
   local tech_signals = nil
   if state_tags.mode_of_operation == "set-research" then
-    local red_network = entity.get_circuit_network(defines.wire_connector_id.circuit_red)
-    local green_network = entity.get_circuit_network(defines.wire_connector_id.circuit_green)
     tech_signals = add_dicts{tech_signals_of_network(red_network),tech_signals_of_network(green_network)}
   end
 
@@ -269,106 +270,135 @@ local function update_signals(research_admin_building)
   if state_tags.mode_of_operation == "output-info" then
     local tech_name = state_tags.output_info_tech_choice
     if tech_name ~= nil then
-      local tech = force.technologies[tech_name]
+      local tech = nil
 
-      if state_tags.output_unit_count and state_tags.output_unit_count_signal_choice then
-        local signal = state_tags.output_unit_count_signal_choice
-        new_filters[#new_filters+1] = {
-          value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-          min = tech.research_unit_count
-        }
-      end
-
-      if state_tags.output_unit_ingredients then
-        for _, item in ipairs(tech.research_unit_ingredients) do
-          new_filters[#new_filters+1] = {
-            value = { type = item.type, name = item.name, quality = "normal", comparator = "=" },
-            min = item.amount
-          }
-        end
-      end
-
-      if state_tags.output_unit_energy and state_tags.output_unit_energy_signal_choice then
-        local signal = state_tags.output_unit_energy_signal_choice
-        new_filters[#new_filters+1] = {
-          value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-          min = math.floor(tech.research_unit_energy/60)
-        }
-      end
-
-      if state_tags.output_progress and state_tags.output_progress_signal_choice then
-        local signal = state_tags.output_progress_signal_choice
-        local progress = 0
-        if tech.researched then
-          progress = 10000
-        else
-          progress = math.floor(tech.saved_progress * 10000)
-        end
-        new_filters[#new_filters+1] = {
-          value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-          min = progress
-        }
-      end
-
-      if state_tags.output_researched and state_tags.output_researched_signal_choice then
-        local signal = state_tags.output_researched_signal_choice
-
-        local researched = 0
-        if is_multi_level_tech(tech) then
-          if tech.researched then
-            researched = tech.level
-          else
-            local level_to_check = tech.level - 1
-            local starting_level = tech.prototype.level
-            if level_to_check >= starting_level then
-              researched = level_to_check
-            else
-              local name_without_level = tech.name:gsub("-" .. starting_level, "")
-              while level_to_check > 0 do
-                if force.technologies[name_without_level .. "-" .. level_to_check].researched then
-                  break
-                else
-                  level_to_check = level_to_check - 1
-                end
+      if tech_name == "anything" then
+        if red_network and red_network.signals then
+          for _, signal in ipairs(red_network.signals) do
+            if signal.signal.type == "virtual" then
+              local this_tech = force.technologies[signal.signal.name]
+              if this_tech and this_tech.enabled then
+                tech = this_tech
+                break
               end
-              researched = level_to_check
             end
           end
-        else
-          if tech.researched then
-            researched = 1
+        end
+        if not tech and green_network and green_network.signals then
+          for _, signal in ipairs(green_network.signals) do
+            if signal.signal.type == "virtual" then
+              local this_tech = force.technologies[signal.signal.name]
+              if this_tech and this_tech.enabled then
+                tech = this_tech
+                break
+              end
+            end
+          end
+        end
+      else
+        tech = force.technologies[tech_name]
+      end
+
+      if tech then
+        if state_tags.output_unit_count and state_tags.output_unit_count_signal_choice then
+          local signal = state_tags.output_unit_count_signal_choice
+          new_filters[#new_filters+1] = {
+            value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
+            min = tech.research_unit_count
+          }
+        end
+
+        if state_tags.output_unit_ingredients then
+          for _, item in ipairs(tech.research_unit_ingredients) do
+            new_filters[#new_filters+1] = {
+              value = { type = item.type, name = item.name, quality = "normal", comparator = "=" },
+              min = item.amount
+            }
           end
         end
 
-        -- A zero signal has the same circuit-network effect as no signal but we create it anyway
-        -- because it makes it easier for the use to see that it's working.
-        new_filters[#new_filters+1] = {
-          value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-          min = researched
-        }
-      end
-
-      if state_tags.output_prereqs then
-        for tech_name, _ in pairs(tech.prerequisites) do
-          new_filters[#new_filters+1] = { value = tech_name, min = 1 }
+        if state_tags.output_unit_energy and state_tags.output_unit_energy_signal_choice then
+          local signal = state_tags.output_unit_energy_signal_choice
+          new_filters[#new_filters+1] = {
+            value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
+            min = math.floor(tech.research_unit_energy/60)
+          }
         end
-      end
 
-      if state_tags.output_successors then
-        for tech_name, _ in pairs(tech.successors) do
-          new_filters[#new_filters+1] = { value = tech_name, min = 1 }
+        if state_tags.output_progress and state_tags.output_progress_signal_choice then
+          local signal = state_tags.output_progress_signal_choice
+          local progress = 0
+          if tech.researched then
+            progress = 10000
+          else
+            progress = math.floor(tech.saved_progress * 10000)
+          end
+          new_filters[#new_filters+1] = {
+            value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
+            min = progress
+          }
         end
-      end
 
-      if state_tags.output_unlocks then
-        for _, effect in ipairs(tech.prototype.effects) do
-          if effect.type == "unlock-recipe" then
-            local recipe = prototypes.recipe[effect.recipe]
-            for _, product in ipairs(recipe.products) do
-              new_filters[#new_filters+1] = {
-                value = { type = product.type, name = product.name, quality = "normal", comparator = "=" },
-                min = 1
-              }
+        if state_tags.output_researched and state_tags.output_researched_signal_choice then
+          local signal = state_tags.output_researched_signal_choice
+
+          local researched = 0
+          if is_multi_level_tech(tech) then
+            if tech.researched then
+              researched = tech.level
+            else
+              local level_to_check = tech.level - 1
+              local starting_level = tech.prototype.level
+              if level_to_check >= starting_level then
+                researched = level_to_check
+              else
+                local name_without_level = tech.name:gsub("-" .. starting_level, "")
+                while level_to_check > 0 do
+                  if force.technologies[name_without_level .. "-" .. level_to_check].researched then
+                    break
+                  else
+                    level_to_check = level_to_check - 1
+                  end
+                end
+                researched = level_to_check
+              end
+            end
+          else
+            if tech.researched then
+              researched = 1
+            end
+          end
+
+          -- A zero signal has the same circuit-network effect as no signal but we create it anyway
+          -- because it makes it easier for the use to see that it's working.
+          new_filters[#new_filters+1] = {
+            value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
+            min = researched
+          }
+        end
+
+        if state_tags.output_prereqs then
+          for tech_name, _ in pairs(tech.prerequisites) do
+            new_filters[#new_filters+1] = { value = tech_name, min = 1 }
+          end
+        end
+
+        if state_tags.output_successors then
+          for tech_name, _ in pairs(tech.successors) do
+            new_filters[#new_filters+1] = { value = tech_name, min = 1 }
+          end
+        end
+
+        if state_tags.output_unlocks then
+          for _, effect in ipairs(tech.prototype.effects) do
+            if effect.type == "unlock-recipe" then
+              local recipe = prototypes.recipe[effect.recipe]
+              for _, product in ipairs(recipe.products) do
+                new_filters[#new_filters+1] = {
+                  value = { type = product.type, name = product.name, quality = "normal", comparator = "=" },
+                  min = 1
+                }
+              end
             end
           end
         end
@@ -633,8 +663,12 @@ script.on_configuration_changed(function(changes)
       research_admin_building.tags = convert_tags_to_0_0_5(research_admin_building.tags)
     end
 
-    for _, ghost in pairs(storage.research_admin_building_ghosts) do
-      ghost.tags = convert_tags_to_0_0_5(ghost.tags)
+    for unit_number, ghost in pairs(storage.research_admin_building_ghosts) do
+      if ghost.valid then
+        ghost.tags = convert_tags_to_0_0_5(ghost.tags)
+      else
+        storage.research_admin_building_ghosts[unit_number] = nil
+      end
     end
 
     for _, player in pairs(game.players) do

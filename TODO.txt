@@ -3,6 +3,7 @@ Bugs:
 - Undo of removal of a ghost correctly sets the settings, but undo of removal of a real building
   creates a ghost with empty settings.
 - If you click too fast it will edit the settings of the last building instead :(.
+- I should properly prefix names in the global namespace.
 
 Features:
 - Allow "output cost" (and other outputs features we add) to get the tech to provide info about from

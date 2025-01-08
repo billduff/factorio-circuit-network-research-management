@@ -104,11 +104,35 @@ local research_admin_building_technology = {
   }
 }
 
+local virtual_tech_item_subgroup = {
+  -- PrototypeBase
+  type = "item-subgroup",
+  name = "virtual-tech",
+  order = "aaa",
+  -- ItemSubGroup
+  group = "other"
+}
+
+local anything_virtual_technology = {
+  -- PrototypeBase
+  type = "technology",
+  name = "anything",
+  subgroup = "virtual-tech",
+  --
+  enabled = false,
+  icons = data.raw["virtual-signal"]["signal-anything"].icons,
+  icon = data.raw["virtual-signal"]["signal-anything"].icon,
+  icon_size = data.raw["virtual-signal"]["signal-anything"].icon_size,
+  unit = { count = 1, time = 1, ingredients = { } },
+}
+
 data:extend{
   tech_item_group,
   tech_item_subgroup,
+  virtual_tech_item_subgroup,
   research_admin_building,
   research_admin_building_item,
   research_admin_building_recipe,
-  research_admin_building_technology
+  research_admin_building_technology,
+  anything_virtual_technology,
 }
