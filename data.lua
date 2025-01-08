@@ -1,5 +1,4 @@
--- CR wduff: Set debug false.
-local debug = true
+local debug = false
 
 local tech_item_group = {
   -- PrototypeBase

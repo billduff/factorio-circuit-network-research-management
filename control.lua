@@ -1,5 +1,4 @@
--- CR wduff: Set debug false.
-local debug = true
+local debug = false
 
 local function debug_print(string)
   if debug then
@@ -611,7 +610,6 @@ local function convert_tags_to_0_0_5(old_tags)
   return new_tags
 end
 
--- CR wduff: Add upgrade logic for 0.0.5
 script.on_configuration_changed(function(changes)
   this_mod_change = changes.mod_changes["circuit-network-research-management"]
   if this_mod_change.old_version < "0.0.3" then
