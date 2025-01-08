@@ -201,6 +201,7 @@ local function setup_gui(window, unit_number, type)
 
     if gui_elt.type == "checkbox" then
       gui_elt.enabled = state_tags.mode_of_operation == "output-info"
+      debug_print(gui_elt.name)
       gui_elt.state = state_tags[gui_elt.name]
       gui_elt.tags = gui_tags
     end
@@ -565,10 +566,55 @@ script.on_init(function()
   end
 end)
 
+local function convert_tags_to_0_0_5(old_tags)
+  -- copy-pasted from initial_state_tags because we want this code to be stable at v0.0.5
+  new_tags = {
+    mode_of_operation = "none",
+    output_unit_count = false,
+    output_unit_ingredients = false,
+    output_unit_energy = false,
+    output_progress = false,
+    output_researched = false,
+    output_prereqs = false,
+    output_successors = false,
+    output_unlocks = false,
+    output_info_tech_choice = nil,
+    output_unit_count_signal_choice = { type = "virtual", name = "signal-U" },
+    output_unit_energy_signal_choice = { type = "virtual", name = "signal-T" },
+    output_progress_signal_choice = { type = "virtual", name = "signal-P" },
+    output_researched_signal_choice = { type = "virtual", name = "signal-R" },
+  }
+
+  if old_tags.set_research_checked
+     and not old_tags.read_research_checked
+     and not old_tags.output_cost_checked
+  then
+    new_tags.mode_of_operation = "set-research"
+  elseif not old_tags.set_research_checked
+     and old_tags.read_research_checked
+     and not old_tags.output_cost_checked
+  then
+    new_tags.mode_of_operation = "read-research"
+  elseif not old_tags.set_research_checked
+     and not old_tags.read_research_checked
+     and old_tags.output_cost_checked
+  then
+    new_tags.mode_of_operation = "output-info"
+    -- This is not _exactly_ the same, but it's close enough and makes it easy to patch up with an
+    -- arithmetic combinator.
+    new_tags.output_unit_count = true
+    new_tags.output_unit_ingredients = true
+  end
+
+  new_tags.output_info_tech_choice = old_tags.output_cost_chosen_tech
+
+  return new_tags
+end
+
 -- CR wduff: Add upgrade logic for 0.0.5
 script.on_configuration_changed(function(changes)
   this_mod_change = changes.mod_changes["circuit-network-research-management"]
-  if this_mod_change.old_version == "0.0.2" then
+  if this_mod_change.old_version < "0.0.3" then
     local research_admin_buildings = {}
     for unit_number, research_admin_building in pairs(storage.research_admin_buildings) do
       research_admin_buildings[unit_number] = {
@@ -583,6 +629,21 @@ script.on_configuration_changed(function(changes)
     end
     storage.research_admin_buildings = research_admin_buildings
     storage.research_admin_building_ghosts = {}
+  end
+  if this_mod_change.old_version < "0.0.5" then
+    for _, research_admin_building in pairs(storage.research_admin_buildings) do
+      research_admin_building.tags = convert_tags_to_0_0_5(research_admin_building.tags)
+    end
+
+    for _, ghost in pairs(storage.research_admin_building_ghosts) do
+      ghost.tags = convert_tags_to_0_0_5(ghost.tags)
+    end
+
+    for _, player in pairs(game.players) do
+      local gui = player.gui.relative["research-admin-building-circuit-settings-window"]
+      gui.destroy()
+      create_gui(player)
+    end
   end
 end)
 
@@ -678,11 +739,11 @@ script.on_event(defines.events.on_gui_opened, function(event)
 end)
 
 local function unit_number_is_valid(unit_number, type)
-    if type == ghost then
-      return research_admin_builing_ghosts[unit_number] ~= nil
-    else
-      return research_admin_builings[unit_number] ~= nil
-    end
+  if type == ghost then
+    return storage.research_admin_building_ghosts[unit_number] ~= nil
+  else
+    return storage.research_admin_buildings[unit_number] ~= nil
+  end
 end
 
 local function set_tag(unit_number, type, tag_name, value)
