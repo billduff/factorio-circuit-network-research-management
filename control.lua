@@ -245,6 +245,89 @@ local function is_multi_level_tech(tech)
   return tech.prototype.level ~= tech.prototype.max_level
 end
 
+local function subtract_signals(signals1, signals2)
+  local function eq(a, b)
+    return
+      (a.type or "item") == (b.type or "item")
+      and a.name == b.name
+      and a.quality == b.quality
+  end
+
+  local function lt(a, b)
+    if (a.signal.type or "item") == (b.signal.type or "item") then
+      if (a.signal.name or "") == (b.signal.name or "") then
+        return (a.signal.quality or "") < (b.signal.quality or "")
+      else
+        return (a.signal.name or "") < (b.signal.name or "")
+      end
+    else
+      return (a.signal.type or "item") < (b.signal.type or "item")
+    end
+  end
+  table.sort(signals1, lt)
+  table.sort(signals2, lt)
+
+  local i = 1
+  local j = 1
+  local result = {}
+  while i <= #signals1 and j <= #signals2 do
+    if eq(signals1[i].signal, signals2[j].signal) then
+      local count = signals1[i].count - signals2[j].count
+      if count ~= 0 then
+        result[#result+1] = {
+          signal = signals1[i].signal,
+          count = count
+        }
+      end
+      i = i + 1
+      j = j + 1
+    elseif lt(signals1[i], signals2[j]) then
+      if signals1[i].count ~= 0 then
+        result[#result+1] = signals1[i]
+      end
+      i = i + 1
+    else
+      if signals2[j].count ~= 0 then
+        result[#result+1] = {
+          signal = signals2[j].signal,
+          count = -signals2[j].count
+        }
+      end
+      j = j + 1
+    end
+  end
+  while i <= #signals1 do
+    result[#result+1] = signals1[i]
+    i = i + 1
+  end
+  while j <= #signals2 do
+    result[#result+1] = signals2[j]
+    j = j + 1
+  end
+
+  return result
+end
+
+local function array_find_map(array, f)
+  for _, value in ipairs(array) do
+    local res = f(value)
+    if res ~= nil then
+      return res
+    end
+  end
+end
+
+local function find_tech_signal(force, signals)
+  return array_find_map(signals, function(signal)
+    if signal.signal.type == "virtual" then
+      local this_tech = force.technologies[signal.signal.name]
+      if this_tech and this_tech.enabled then
+        return this_tech
+      end
+    end
+  end)
+end
+
 local function update_signals(research_admin_building)
   local entity = research_admin_building.entity
   local force = entity.force
@@ -253,17 +336,22 @@ local function update_signals(research_admin_building)
   local red_network = entity.get_circuit_network(defines.wire_connector_id.circuit_red)
   local green_network = entity.get_circuit_network(defines.wire_connector_id.circuit_green)
 
+  if game.tick ~= research_admin_building.output_updated_tick then
+    research_admin_building.output_updated_tick = game.tick
+    research_admin_building.effective_output = research_admin_building.pending_output
+  end
+
   local tech_signals = nil
   if state_tags.mode_of_operation == "set-research" then
     tech_signals = add_dicts{tech_signals_of_network(red_network),tech_signals_of_network(green_network)}
   end
 
-  local new_filters = {}
+  local new_output = {}
 
   if state_tags.mode_of_operation == "read-research" then
     local tech = force.current_research
     if tech ~= nil then
-      new_filters[#new_filters+1] = { value = tech.name, min = 1 }
+      new_output[#new_output+1] = { signal = { type = "virtual", name = tech.name }, count = 1 }
     end
   end
 
@@ -274,26 +362,12 @@ local function update_signals(research_admin_building)
 
       if tech_name == "anything" then
         if red_network and red_network.signals then
-          for _, signal in ipairs(red_network.signals) do
-            if signal.signal.type == "virtual" then
-              local this_tech = force.technologies[signal.signal.name]
-              if this_tech and this_tech.enabled then
-                tech = this_tech
-                break
-              end
-            end
-          end
+          local signals = subtract_signals(red_network.signals, research_admin_building.effective_output)
+          tech = find_tech_signal(force, signals)
         end
         if not tech and green_network and green_network.signals then
-          for _, signal in ipairs(green_network.signals) do
-            if signal.signal.type == "virtual" then
-              local this_tech = force.technologies[signal.signal.name]
-              if this_tech and this_tech.enabled then
-                tech = this_tech
-                break
-              end
-            end
-          end
+          local signals = subtract_signals(green_network.signals, research_admin_building.effective_output)
+          tech = find_tech_signal(force, signals)
         end
       else
         tech = force.technologies[tech_name]
@@ -302,26 +376,23 @@ local function update_signals(research_admin_building)
       if tech then
         if state_tags.output_unit_count and state_tags.output_unit_count_signal_choice then
           local signal = state_tags.output_unit_count_signal_choice
-          new_filters[#new_filters+1] = {
-            value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-            min = tech.research_unit_count
-          }
+          new_output[#new_output+1] = { signal = signal, count = tech.research_unit_count }
         end
 
         if state_tags.output_unit_ingredients then
           for _, item in ipairs(tech.research_unit_ingredients) do
-            new_filters[#new_filters+1] = {
-              value = { type = item.type, name = item.name, quality = "normal", comparator = "=" },
-              min = item.amount
+            new_output[#new_output+1] = {
+              signal = { type = item.type, name = item.name },
+              count = item.amount
             }
           end
         end
 
         if state_tags.output_unit_energy and state_tags.output_unit_energy_signal_choice then
           local signal = state_tags.output_unit_energy_signal_choice
-          new_filters[#new_filters+1] = {
-            value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-            min = math.floor(tech.research_unit_energy/60)
+          new_output[#new_output+1] = {
+            signal = signal,
+            count = math.floor(tech.research_unit_energy/60)
           }
         end
 
@@ -333,10 +404,7 @@ local function update_signals(research_admin_building)
           else
             progress = math.floor(tech.saved_progress * 10000)
           end
-          new_filters[#new_filters+1] = {
-            value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-            min = progress
-          }
+          new_output[#new_output+1] = { signal = signal, count = progress }
         end
 
         if state_tags.output_researched and state_tags.output_researched_signal_choice then
@@ -371,21 +439,24 @@ local function update_signals(research_admin_building)
 
           -- A zero signal has the same circuit-network effect as no signal but we create it anyway
           -- because it makes it easier for the use to see that it's working.
-          new_filters[#new_filters+1] = {
-            value = { type = signal.type, name = signal.name, quality = signal.quality or "normal" },
-            min = researched
-          }
+          new_output[#new_output+1] = { signal = signal, count = researched }
         end
 
         if state_tags.output_prereqs then
           for tech_name, _ in pairs(tech.prerequisites) do
-            new_filters[#new_filters+1] = { value = tech_name, min = 1 }
+            new_output[#new_output+1] = {
+              signal = { type = "virtual", name = tech_name },
+              count = 1
+            }
           end
         end
 
         if state_tags.output_successors then
           for tech_name, _ in pairs(tech.successors) do
-            new_filters[#new_filters+1] = { value = tech_name, min = 1 }
+            new_output[#new_output+1] = {
+              signal = { type = "virtual", name = tech_name },
+              count = 1
+            }
           end
         end
 
@@ -394,9 +465,9 @@ local function update_signals(research_admin_building)
             if effect.type == "unlock-recipe" then
               local recipe = prototypes.recipe[effect.recipe]
               for _, product in ipairs(recipe.products) do
-                new_filters[#new_filters+1] = {
-                  value = { type = product.type, name = product.name, quality = "normal", comparator = "=" },
-                  min = 1
+                new_output[#new_output+1] = {
+                  signal = { type = product.type, name = product.name },
+                  count = 1
                 }
               end
             end
@@ -405,6 +476,8 @@ local function update_signals(research_admin_building)
       end
     end
   end
+
+  research_admin_building.pending_output = new_output
 
   -- CR wduff: Figure out how to prevent the user from editing this stuff, then initialize it once
   -- when the building is placed instead of setting it every time.
@@ -419,6 +492,19 @@ local function update_signals(research_admin_building)
   end
   local logistic_section = control_behavior.get_section(1)
   logistic_section.active = true
+
+  local new_filters = {}
+  for i, output in pairs(new_output) do
+    new_filters[i] = {
+      value = {
+        type = output.signal.type,
+        name = output.signal.name,
+        quality = output.signal.quality or "normal",
+        comparator = "="
+      },
+      min = output.count
+    }
+  end
   logistic_section.filters = new_filters
 
   return force, tech_signals
@@ -642,39 +728,41 @@ end
 
 script.on_configuration_changed(function(changes)
   this_mod_change = changes.mod_changes["circuit-network-research-management"]
-  if this_mod_change.old_version < "0.0.3" then
-    local research_admin_buildings = {}
-    for unit_number, research_admin_building in pairs(storage.research_admin_buildings) do
-      research_admin_buildings[unit_number] = {
-        tags = {
-          set_research_checked = research_admin_building.set_research_checked,
-          read_research_checked = research_admin_building.read_research_checked,
-          output_cost_checked = research_admin_building.output_cost_checked,
-          output_cost_chosen_tech = research_admin_building.output_cost_chosen_tech,
-         },
-         entity = research_admin_building.entity
-      }
-    end
-    storage.research_admin_buildings = research_admin_buildings
-    storage.research_admin_building_ghosts = {}
-  end
-  if this_mod_change.old_version < "0.0.5" then
-    for _, research_admin_building in pairs(storage.research_admin_buildings) do
-      research_admin_building.tags = convert_tags_to_0_0_5(research_admin_building.tags)
-    end
-
-    for unit_number, ghost in pairs(storage.research_admin_building_ghosts) do
-      if ghost.valid then
-        ghost.tags = convert_tags_to_0_0_5(ghost.tags)
-      else
-        storage.research_admin_building_ghosts[unit_number] = nil
+  if this_mod_change then
+    if this_mod_change.old_version < "0.0.3" then
+      local research_admin_buildings = {}
+      for unit_number, research_admin_building in pairs(storage.research_admin_buildings) do
+        research_admin_buildings[unit_number] = {
+          tags = {
+            set_research_checked = research_admin_building.set_research_checked,
+            read_research_checked = research_admin_building.read_research_checked,
+            output_cost_checked = research_admin_building.output_cost_checked,
+            output_cost_chosen_tech = research_admin_building.output_cost_chosen_tech,
+           },
+           entity = research_admin_building.entity
+        }
       end
+      storage.research_admin_buildings = research_admin_buildings
+      storage.research_admin_building_ghosts = {}
     end
+    if this_mod_change.old_version < "0.0.5" then
+      for _, research_admin_building in pairs(storage.research_admin_buildings) do
+        research_admin_building.tags = convert_tags_to_0_0_5(research_admin_building.tags)
+      end
 
-    for _, player in pairs(game.players) do
-      local gui = player.gui.relative["research-admin-building-circuit-settings-window"]
-      gui.destroy()
-      create_gui(player)
+      for unit_number, ghost in pairs(storage.research_admin_building_ghosts) do
+        if ghost.valid then
+          ghost.tags = convert_tags_to_0_0_5(ghost.tags)
+        else
+          storage.research_admin_building_ghosts[unit_number] = nil
+        end
+      end
+
+      for _, player in pairs(game.players) do
+        local gui = player.gui.relative["research-admin-building-circuit-settings-window"]
+        gui.destroy()
+        create_gui(player)
+      end
     end
   end
 end)
@@ -826,8 +914,6 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
   end
 end)
 
-script.on_event(defines.events.on_tick, function(event)
-  if event.tick % 32 == 0 then
-    update_signals_all()
-  end
+script.on_nth_tick(32, function(event)
+  update_signals_all()
 end)
