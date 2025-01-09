@@ -264,6 +264,14 @@ local function subtract_signals(signals1, signals2)
       return (a.signal.type or "item") < (b.signal.type or "item")
     end
   end
+
+  if signals1 == nil then
+    signals1 = {}
+  end
+  if signals2 == nil then
+    signals2 = {}
+  end
+
   table.sort(signals1, lt)
   table.sort(signals2, lt)
 
