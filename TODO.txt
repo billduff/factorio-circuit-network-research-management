@@ -6,10 +6,8 @@ Bugs:
 - I should properly prefix names in the global namespace.
 
 Features:
-- Allow "output cost" (and other outputs features we add) to get the tech to provide info about from
-  the network, instead of requiring it to be set manually by the player.
 - Output a pulse signal when a research finishes.
-- Allow specifying the level of an infinite research?
+- Allow specifying the level when setting an infinite research?
 - Make the refresh rate configurable.
 - Synchronously update on some events, such as research finished.
 - Output previous research
@@ -20,7 +18,6 @@ Features:
   "Hide researched" would be better, but doesn't seem to be supported by the filter menu.
 
 Support more outputs about a given research:
-- current level
 - max level?
 - triggers for trigger-based research, which don't have a unit cost
 - If there is some good recipe-signal mod, add recipes unlocked when that mod is present.
